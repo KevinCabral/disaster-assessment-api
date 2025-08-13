@@ -9,3 +9,10 @@ nohup: ignoring input
  * Restarting with stat
  * Debugger is active!
  * Debugger PIN: 111-054-978
+87.58.94.76 - - [14/Aug/2025 00:11:35] "GET /docs/ HTTP/1.1" 200 -
+87.58.94.76 - - [14/Aug/2025 00:11:36] "[36mGET /swaggerui/droid-sans.css HTTP/1.1[0m" 304 -
+87.58.94.76 - - [14/Aug/2025 00:11:36] "[36mGET /swaggerui/swagger-ui.css HTTP/1.1[0m" 304 -
+87.58.94.76 - - [14/Aug/2025 00:11:36] "[36mGET /swaggerui/swagger-ui-bundle.js HTTP/1.1[0m" 304 -
+87.58.94.76 - - [14/Aug/2025 00:11:36] "[36mGET /swaggerui/swagger-ui-standalone-preset.js HTTP/1.1[0m" 304 -
+87.58.94.76 - - [14/Aug/2025 00:11:36] "GET /api/swagger.json HTTP/1.1" 200 -
+87.58.94.76 - - [14/Aug/2025 00:11:36] "[36mGET /swaggerui/favicon-32x32.png HTTP/1.1[0m" 304 -

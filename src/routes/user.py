@@ -1,39 +1,39 @@
 from flask import Blueprint, request, jsonify
-from models.user import db, User
+from models.user import db, Usuario
 
 # Create blueprint for user routes (template)
-user_bp = Blueprint('user', __name__)
+usuario_bp = Blueprint('usuario', __name__)
 
-@user_bp.route('/users', methods=['GET'])
-def get_users():
-    """Get all users (template route)"""
+@usuario_bp.route('/usuarios', methods=['GET'])
+def obter_usuarios():
+    """Obter todos os utilizadores (rota modelo)"""
     try:
-        users = User.query.all()
-        return jsonify([user.to_dict() for user in users])
+        usuarios = Usuario.query.all()
+        return jsonify([usuario.to_dict() for usuario in usuarios])
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'erro': str(e)}), 500
 
-@user_bp.route('/users', methods=['POST'])
-def create_user():
-    """Create a new user (template route)"""
+@usuario_bp.route('/usuarios', methods=['POST'])
+def criar_usuario():
+    """Criar um novo utilizador (rota modelo)"""
     try:
         data = request.get_json()
-        user = User(
-            username=data.get('username'),
+        usuario = Usuario(
+            nome_usuario=data.get('nome_usuario'),
             email=data.get('email')
         )
-        db.session.add(user)
+        db.session.add(usuario)
         db.session.commit()
-        return jsonify(user.to_dict()), 201
+        return jsonify(usuario.to_dict()), 201
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'erro': str(e)}), 500
 
-@user_bp.route('/users/<int:id>', methods=['GET'])
-def get_user(id):
-    """Get a specific user (template route)"""
+@usuario_bp.route('/usuarios/<int:id>', methods=['GET'])
+def obter_usuario(id):
+    """Obter um utilizador específico (rota modelo)"""
     try:
-        user = User.query.get_or_404(id)
-        return jsonify(user.to_dict())
+        usuario = Usuario.query.get_or_404(id)
+        return jsonify(usuario.to_dict())
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'erro': str(e)}), 500

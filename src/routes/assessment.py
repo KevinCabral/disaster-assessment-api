@@ -1,67 +1,73 @@
 from flask import Blueprint, request, jsonify
-from models.user import db
-from models.assessment import DisasterAssessment
+from src.models.user import db
+from src.models.assessment import AvaliacaoDesastre
 
 # Create blueprint for basic assessment routes
 assessment_bp = Blueprint('assessment', __name__)
 
 @assessment_bp.route('/assessments', methods=['GET'])
 def get_assessments():
-    """Get all assessments (basic route without Swagger)"""
+    """Obter todas as avaliações (rota básica sem Swagger)"""
     try:
-        assessments = DisasterAssessment.query.all()
-        return jsonify([assessment.to_dict() for assessment in assessments])
+        avaliacoes = AvaliacaoDesastre.query.all()
+        return jsonify([avaliacao.to_dict() for avaliacao in avaliacoes])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @assessment_bp.route('/assessments', methods=['POST'])
 def create_assessment():
-    """Create a new assessment (basic route without Swagger)"""
+    """Criar uma nova avaliação (rota básica sem Swagger)"""
     try:
         data = request.get_json()
-        assessment = DisasterAssessment.from_dict(data)
-        db.session.add(assessment)
+        avaliacao = AvaliacaoDesastre.from_dict(data)
+        db.session.add(avaliacao)
         db.session.commit()
-        return jsonify(assessment.to_dict()), 201
+        return jsonify(avaliacao.to_dict()), 201
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
 @assessment_bp.route('/assessments/<int:id>', methods=['GET'])
 def get_assessment(id):
-    """Get a specific assessment (basic route without Swagger)"""
+    """Obter uma avaliação específica (rota básica sem Swagger)"""
     try:
-        assessment = DisasterAssessment.query.get_or_404(id)
-        return jsonify(assessment.to_dict())
+        avaliacao = AvaliacaoDesastre.query.get_or_404(id)
+        return jsonify(avaliacao.to_dict())
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @assessment_bp.route('/assessments/<int:id>', methods=['PUT'])
 def update_assessment(id):
-    """Update an assessment (basic route without Swagger)"""
+    """Atualizar uma avaliação (rota básica sem Swagger)"""
     try:
-        assessment = DisasterAssessment.query.get_or_404(id)
+        avaliacao = AvaliacaoDesastre.query.get_or_404(id)
         data = request.get_json()
         
-        # Update fields
-        for key, value in data.items():
-            if hasattr(assessment, key):
-                setattr(assessment, key, value)
+        # Atualizar usando from_dict para mapeamento correto dos campos
+        updated_avaliacao = AvaliacaoDesastre.from_dict(data)
+        
+        # Copiar campos atualizados
+        for attr in ['nome_responsavel', 'numero_documento', 'contacto_telefonico', 'membros_agregado',
+                     'grupos_vulneraveis', 'endereco_completo', 'ponto_referencia', 'latitude_gps', 
+                     'longitude_gps', 'tipo_estrutura', 'nivel_danos', 'perdas', 'outras_perdas',
+                     'ficheiros_prova', 'necessidade_urgente', 'outra_necessidade']:
+            if hasattr(updated_avaliacao, attr):
+                setattr(avaliacao, attr, getattr(updated_avaliacao, attr))
         
         db.session.commit()
-        return jsonify(assessment.to_dict())
+        return jsonify(avaliacao.to_dict())
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
 @assessment_bp.route('/assessments/<int:id>', methods=['DELETE'])
 def delete_assessment(id):
-    """Delete an assessment (basic route without Swagger)"""
+    """Eliminar uma avaliação (rota básica sem Swagger)"""
     try:
-        assessment = DisasterAssessment.query.get_or_404(id)
-        db.session.delete(assessment)
+        avaliacao = AvaliacaoDesastre.query.get_or_404(id)
+        db.session.delete(avaliacao)
         db.session.commit()
-        return jsonify({'message': 'Assessment deleted successfully'})
+        return jsonify({'message': 'Avaliação eliminada com sucesso'})
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500

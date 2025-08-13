@@ -1,94 +1,95 @@
 from flask import request
 from flask_restx import Namespace, Resource, fields
-from models.assessment import db, DisasterAssessment
+from src.models.user import db
+from src.models.assessment import AvaliacaoDesastre
 import os
 from werkzeug.utils import secure_filename
 
-# Create namespace for disaster assessments
-api = Namespace('assessments', description='Operações de Avaliação de Desastres')
+# Criar namespace para avaliações de desastres
+api = Namespace('avaliacoes', description='Operações de Avaliação de Desastres')
 
-# Configuration for file uploads
-UPLOAD_FOLDER = 'uploads/evidence'
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'mp4', 'mov', 'avi'}
+# Configuração para carregamento de ficheiros
+PASTA_UPLOAD = 'uploads/evidence'
+EXTENSOES_PERMITIDAS = {'png', 'jpg', 'jpeg', 'gif', 'mp4', 'mov', 'avi'}
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+def ficheiro_permitido(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in EXTENSOES_PERMITIDAS
 
-def ensure_upload_dir():
-    """Ensure upload directory exists"""
-    upload_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'static', UPLOAD_FOLDER)
-    os.makedirs(upload_path, exist_ok=True)
-    return upload_path
+def garantir_pasta_upload():
+    """Garantir que a pasta de upload existe"""
+    caminho_upload = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'static', PASTA_UPLOAD)
+    os.makedirs(caminho_upload, exist_ok=True)
+    return caminho_upload
 
-# Define models for Swagger documentation
-assessment_model = api.model('DisasterAssessment', {
+# Definir modelos para documentação Swagger com campos em português
+assessment_model = api.model('AvaliacaoDesastre', {
     'id': fields.Integer(readonly=True, description='ID da Avaliação'),
-    'responsible_name': fields.String(required=True, description='Nome do Responsável'),
-    'document_number': fields.String(required=True, description='Número de Documento (BI ou Passaporte)'),
-    'phone_contact': fields.String(required=True, description='Contacto Telefónico'),
-    'household_members': fields.Integer(required=True, description='N.º de Pessoas no Agregado Familiar'),
-    'vulnerable_groups': fields.List(fields.String, description='Grupos Vulneráveis', 
+    'nome_responsavel': fields.String(required=True, description='Nome do Responsável'),
+    'numero_documento': fields.String(required=True, description='Número de Documento (BI ou Passaporte)'),
+    'contacto_telefonico': fields.String(required=True, description='Contacto Telefónico'),
+    'membros_agregado': fields.Integer(required=True, description='N.º de Pessoas no Agregado Familiar'),
+    'grupos_vulneraveis': fields.List(fields.String, description='Grupos Vulneráveis', 
                                    enum=['bebe_crianca', 'idoso', 'pessoa_deficiencia', 'doente_cronico']),
-    'full_address': fields.String(required=True, description='Endereço Completo'),
-    'reference_point': fields.String(description='Ponto de Referência'),
-    'gps_latitude': fields.Float(description='Latitude GPS'),
-    'gps_longitude': fields.Float(description='Longitude GPS'),
-    'structure_type': fields.String(required=True, description='Tipo de Estrutura Afetada',
+    'endereco_completo': fields.String(required=True, description='Endereço Completo'),
+    'ponto_referencia': fields.String(description='Ponto de Referência'),
+    'latitude_gps': fields.Float(description='Latitude GPS'),
+    'longitude_gps': fields.Float(description='Longitude GPS'),
+    'tipo_estrutura': fields.String(required=True, description='Tipo de Estrutura Afetada',
                                   enum=['habitacao', 'comercio', 'agricultura', 'outro']),
-    'damage_level': fields.String(required=True, description='Nível de Danos',
+    'nivel_danos': fields.String(required=True, description='Nível de Danos',
                                 enum=['parcial', 'grave', 'total']),
-    'losses': fields.List(fields.String, description='Perdas',
+    'perdas': fields.List(fields.String, description='Perdas',
                          enum=['alimentos', 'roupas_calcado', 'moveis', 'eletrodomesticos', 'documentos_pessoais', 'animais_domesticos', 'outros']),
-    'losses_other': fields.String(description='Especificação de Outras Perdas'),
-    'evidence_files': fields.List(fields.String, description='Caminhos dos Ficheiros de Prova'),
-    'urgent_need': fields.String(required=True, description='Necessidade Urgente',
+    'outras_perdas': fields.String(description='Especificação de Outras Perdas'),
+    'ficheiros_prova': fields.List(fields.String, description='Ficheiros de prova'),
+    'necessidade_urgente': fields.String(required=True, description='Necessidade Urgente',
                                enum=['agua_potavel', 'alimentacao', 'abrigo_temporario', 'roupas_cobertores', 'medicamentos', 'outros']),
-    'urgent_need_other': fields.String(description='Especificação de Outra Necessidade Urgente'),
-    'created_at': fields.DateTime(readonly=True, description='Data de Criação'),
-    'updated_at': fields.DateTime(readonly=True, description='Data da Última Atualização')
+    'outra_necessidade': fields.String(description='Especificação de Outra Necessidade Urgente'),
+    'data_criacao': fields.DateTime(readonly=True, description='Data de Criação'),
+    'data_atualizacao': fields.DateTime(readonly=True, description='Data da Última Atualização')
 })
 
-assessment_input = api.model('AssessmentInput', {
-    'responsible_name': fields.String(required=True, description='Nome do Responsável'),
-    'document_number': fields.String(required=True, description='Número de Documento (BI ou Passaporte)'),
-    'phone_contact': fields.String(required=True, description='Contacto Telefónico'),
-    'household_members': fields.Integer(required=True, description='N.º de Pessoas no Agregado Familiar'),
-    'vulnerable_groups': fields.List(fields.String, description='Grupos Vulneráveis', 
+entrada_avaliacao = api.model('EntradaAvaliacao', {
+    'nome_responsavel': fields.String(required=True, description='Nome do Responsável'),
+    'numero_documento': fields.String(required=True, description='Número de Documento (BI ou Passaporte)'),
+    'contacto_telefonico': fields.String(required=True, description='Contacto Telefónico'),
+    'membros_agregado': fields.Integer(required=True, description='N.º de Pessoas no Agregado Familiar'),
+    'grupos_vulneraveis': fields.List(fields.String, description='Grupos Vulneráveis', 
                                    enum=['bebe_crianca', 'idoso', 'pessoa_deficiencia', 'doente_cronico']),
-    'full_address': fields.String(required=True, description='Endereço Completo'),
-    'reference_point': fields.String(description='Ponto de Referência'),
-    'gps_latitude': fields.Float(description='Latitude GPS'),
-    'gps_longitude': fields.Float(description='Longitude GPS'),
-    'structure_type': fields.String(required=True, description='Tipo de Estrutura Afetada',
+    'endereco_completo': fields.String(required=True, description='Endereço Completo'),
+    'ponto_referencia': fields.String(description='Ponto de Referência'),
+    'latitude_gps': fields.Float(description='Latitude GPS'),
+    'longitude_gps': fields.Float(description='Longitude GPS'),
+    'tipo_estrutura': fields.String(required=True, description='Tipo de Estrutura Afetada',
                                   enum=['habitacao', 'comercio', 'agricultura', 'outro']),
-    'damage_level': fields.String(required=True, description='Nível de Danos',
+    'nivel_danos': fields.String(required=True, description='Nível de Danos',
                                 enum=['parcial', 'grave', 'total']),
-    'losses': fields.List(fields.String, description='Perdas',
+    'perdas': fields.List(fields.String, description='Perdas',
                          enum=['alimentos', 'roupas_calcado', 'moveis', 'eletrodomesticos', 'documentos_pessoais', 'animais_domesticos', 'outros']),
-    'losses_other': fields.String(description='Especificação de Outras Perdas'),
-    'urgent_need': fields.String(required=True, description='Necessidade Urgente',
+    'outras_perdas': fields.String(description='Especificação de Outras Perdas'),
+    'necessidade_urgente': fields.String(required=True, description='Necessidade Urgente',
                                enum=['agua_potavel', 'alimentacao', 'abrigo_temporario', 'roupas_cobertores', 'medicamentos', 'outros']),
-    'urgent_need_other': fields.String(description='Especificação de Outra Necessidade Urgente')
+    'outra_necessidade': fields.String(description='Especificação de Outra Necessidade Urgente')
 })
 
-statistics_model = api.model('Statistics', {
-    'total_assessments': fields.Integer(description='Total de avaliações'),
-    'damage_level_stats': fields.Raw(description='Estatísticas por nível de danos'),
-    'structure_type_stats': fields.Raw(description='Estatísticas por tipo de estrutura'),
-    'urgent_need_stats': fields.Raw(description='Estatísticas por necessidade urgente')
+modelo_estatisticas = api.model('Estatisticas', {
+    'total_avaliacoes': fields.Integer(description='Total de avaliações'),
+    'estatisticas_nivel_danos': fields.Raw(description='Estatísticas por nível de danos'),
+    'estatisticas_tipo_estrutura': fields.Raw(description='Estatísticas por tipo de estrutura'),
+    'estatisticas_necessidade_urgente': fields.Raw(description='Estatísticas por necessidade urgente')
 })
 
-options_model = api.model('Options', {
-    'vulnerable_groups': fields.List(fields.String, description='Opções de grupos vulneráveis disponíveis'),
-    'structure_types': fields.List(fields.String, description='Opções de tipos de estrutura disponíveis'),
-    'damage_levels': fields.List(fields.String, description='Opções de níveis de danos disponíveis'),
-    'loss_types': fields.List(fields.String, description='Opções de tipos de perdas disponíveis'),
-    'urgent_needs': fields.List(fields.String, description='Opções de necessidades urgentes disponíveis')
+modelo_opcoes = api.model('Opcoes', {
+    'grupos_vulneraveis': fields.List(fields.String, description='Opções de grupos vulneráveis disponíveis'),
+    'tipos_estrutura': fields.List(fields.String, description='Opções de tipos de estrutura disponíveis'),
+    'niveis_danos': fields.List(fields.String, description='Opções de níveis de danos disponíveis'),
+    'tipos_perdas': fields.List(fields.String, description='Opções de tipos de perdas disponíveis'),
+    'necessidades_urgentes': fields.List(fields.String, description='Opções de necessidades urgentes disponíveis')
 })
 
 @api.route('')
-class AssessmentList(Resource):
-    @api.doc('list_assessments')
+class ListaAvaliacoes(Resource):
+    @api.doc('listar_avaliacoes')
     @api.param('page', 'Número da página', type='integer', default=1)
     @api.param('per_page', 'Itens por página', type='integer', default=10)
     @api.param('damage_level', 'Filtrar por nível de danos', enum=['parcial', 'grave', 'total'])
@@ -96,263 +97,209 @@ class AssessmentList(Resource):
     @api.param('urgent_need', 'Filtrar por necessidade urgente', enum=['agua_potavel', 'alimentacao', 'abrigo_temporario', 'roupas_cobertores', 'medicamentos', 'outros'])
     @api.marshal_with(assessment_model, as_list=True)
     def get(self):
-        """Obter todas as avaliações de desastres com filtragem opcional"""
+        """Listar todas as avaliações de desastre"""
         try:
-            # Query parameters for filtering
-            page = request.args.get('page', 1, type=int)
-            per_page = request.args.get('per_page', 10, type=int)
-            damage_level = request.args.get('damage_level')
-            structure_type = request.args.get('structure_type')
-            urgent_need = request.args.get('urgent_need')
-            
-            # Build query
-            query = DisasterAssessment.query
-            
-            if damage_level:
-                query = query.filter(DisasterAssessment.damage_level == damage_level)
-            if structure_type:
-                query = query.filter(DisasterAssessment.structure_type == structure_type)
-            if urgent_need:
-                query = query.filter(DisasterAssessment.urgent_need == urgent_need)
-            
-            # Paginate results
-            assessments = query.paginate(
-                page=page, 
-                per_page=per_page, 
-                error_out=False
-            )
-            
-            return {
-                'assessments': [assessment.to_dict() for assessment in assessments.items],
-                'total': assessments.total,
-                'pages': assessments.pages,
-                'current_page': page,
-                'per_page': per_page
-            }
-        except Exception as e:
-            api.abort(500, str(e))
+            pagina = request.args.get('page', 1, type=int)
+            por_pagina = request.args.get('per_page', 10, type=int)
+            nivel_danos = request.args.get('damage_level')
+            tipo_estrutura = request.args.get('structure_type')
+            necessidade_urgente = request.args.get('urgent_need')
 
-    @api.doc('create_assessment')
-    @api.expect(assessment_input)
+            query = AvaliacaoDesastre.query
+
+            if nivel_danos:
+                query = query.filter(AvaliacaoDesastre.damage_level == nivel_danos)
+            if tipo_estrutura:
+                query = query.filter(AvaliacaoDesastre.structure_type == tipo_estrutura)
+            if necessidade_urgente:
+                query = query.filter(AvaliacaoDesastre.urgent_need == necessidade_urgente)
+
+            avaliacoes = query.paginate(
+                page=pagina, per_page=por_pagina, error_out=False
+            )
+
+            return [avaliacao.to_dict() for avaliacao in avaliacoes.items]
+
+        except Exception as e:
+            api.abort(500, f'Erro interno do servidor: {str(e)}')
+
+    @api.doc('criar_avaliacao')
+    @api.expect(entrada_avaliacao)
     @api.marshal_with(assessment_model, code=201)
     def post(self):
         """Criar uma nova avaliação de desastre"""
         try:
             data = api.payload
-            
-            # Validate required fields
-            required_fields = [
-                'responsible_name', 'document_number', 'phone_contact', 
-                'household_members', 'full_address', 'structure_type', 
+            if not data:
+                api.abort(400, 'Dados não fornecidos')
+
+            # Validar campos obrigatórios
+            campos_obrigatorios = [
+                'responsible_name', 'document_number', 'phone_contact',
+                'household_members', 'full_address', 'structure_type',
                 'damage_level', 'urgent_need'
             ]
-            
-            for field in required_fields:
-                if field not in data or not data[field]:
-                    api.abort(400, f'Missing required field: {field}')
-            
-            # Create new assessment
-            assessment = DisasterAssessment.from_dict(data)
-            
-            db.session.add(assessment)
+
+            for campo in campos_obrigatorios:
+                if not data.get(campo):
+                    api.abort(400, f'Campo obrigatório em falta: {campo}')
+
+            avaliacao = AvaliacaoDesastre.from_dict(data)
+            db.session.add(avaliacao)
             db.session.commit()
-            
-            return assessment.to_dict(), 201
+
+            return avaliacao.to_dict(), 201
+
         except Exception as e:
             db.session.rollback()
-            api.abort(500, str(e))
+            api.abort(500, f'Erro ao criar avaliação: {str(e)}')
 
 @api.route('/<int:assessment_id>')
-@api.param('assessment_id', 'ID da Avaliação')
-class Assessment(Resource):
-    @api.doc('get_assessment')
+class RecursoAvaliacao(Resource):
+    @api.doc('obter_avaliacao')
     @api.marshal_with(assessment_model)
     def get(self, assessment_id):
-        """Obter uma avaliação de desastre específica por ID"""
+        """Obter uma avaliação específica pelo ID"""
         try:
-            assessment = DisasterAssessment.query.get_or_404(assessment_id)
-            return assessment.to_dict()
+            avaliacao = AvaliacaoDesastre.query.get_or_404(assessment_id)
+            return avaliacao.to_dict()
         except Exception as e:
-            api.abort(500, str(e))
+            api.abort(500, f'Erro ao obter avaliação: {str(e)}')
 
-    @api.doc('update_assessment')
-    @api.expect(assessment_input)
+    @api.doc('atualizar_avaliacao')
+    @api.expect(entrada_avaliacao)
     @api.marshal_with(assessment_model)
     def put(self, assessment_id):
-        """Atualizar uma avaliação de desastre existente"""
+        """Atualizar uma avaliação existente"""
         try:
-            assessment = DisasterAssessment.query.get_or_404(assessment_id)
+            avaliacao = AvaliacaoDesastre.query.get_or_404(assessment_id)
             data = api.payload
-            
-            # Update fields
-            if 'responsible_name' in data:
-                assessment.responsible_name = data['responsible_name']
-            if 'document_number' in data:
-                assessment.document_number = data['document_number']
-            if 'phone_contact' in data:
-                assessment.phone_contact = data['phone_contact']
-            if 'household_members' in data:
-                assessment.household_members = data['household_members']
-            if 'vulnerable_groups' in data:
-                assessment.set_vulnerable_groups(data['vulnerable_groups'])
-            if 'full_address' in data:
-                assessment.full_address = data['full_address']
-            if 'reference_point' in data:
-                assessment.reference_point = data['reference_point']
-            if 'gps_latitude' in data:
-                assessment.gps_latitude = data['gps_latitude']
-            if 'gps_longitude' in data:
-                assessment.gps_longitude = data['gps_longitude']
-            if 'structure_type' in data:
-                assessment.structure_type = data['structure_type']
-            if 'damage_level' in data:
-                assessment.damage_level = data['damage_level']
-            if 'losses' in data:
-                assessment.set_losses(data['losses'])
-            if 'losses_other' in data:
-                assessment.losses_other = data['losses_other']
-            if 'urgent_need' in data:
-                assessment.urgent_need = data['urgent_need']
-            if 'urgent_need_other' in data:
-                assessment.urgent_need_other = data['urgent_need_other']
-            
-            db.session.commit()
-            return assessment.to_dict()
-        except Exception as e:
-            db.session.rollback()
-            api.abort(500, str(e))
 
-    @api.doc('delete_assessment')
-    def delete(self, assessment_id):
-        """Eliminar uma avaliação de desastre"""
-        try:
-            assessment = DisasterAssessment.query.get_or_404(assessment_id)
-            db.session.delete(assessment)
+            if not data:
+                api.abort(400, 'Dados não fornecidos')
+
+            # Atualizar a avaliação com os novos dados
+            avaliacao_atualizada = AvaliacaoDesastre.from_dict(data)
+            for campo in data.keys():
+                if hasattr(avaliacao, campo):
+                    setattr(avaliacao, campo, getattr(avaliacao_atualizada, campo))
+
             db.session.commit()
-            return {'message': 'Assessment deleted successfully'}
+            return avaliacao.to_dict()
+
         except Exception as e:
             db.session.rollback()
-            api.abort(500, str(e))
+            api.abort(500, f'Erro ao atualizar avaliação: {str(e)}')
+
+    @api.doc('eliminar_avaliacao')
+    def delete(self, assessment_id):
+        """Eliminar uma avaliação"""
+        try:
+            avaliacao = AvaliacaoDesastre.query.get_or_404(assessment_id)
+            db.session.delete(avaliacao)
+            db.session.commit()
+            return {'message': 'Avaliação eliminada com sucesso'}, 200
+        except Exception as e:
+            db.session.rollback()
+            api.abort(500, f'Erro ao eliminar avaliação: {str(e)}')
 
 @api.route('/<int:assessment_id>/evidence')
-@api.param('assessment_id', 'ID da Avaliação')
-class AssessmentEvidence(Resource):
-    @api.doc('upload_evidence')
+class CarregarProvas(Resource):
+    @api.doc('carregar_provas')
     def post(self, assessment_id):
         """Carregar ficheiros de prova para uma avaliação"""
         try:
-            assessment = DisasterAssessment.query.get_or_404(assessment_id)
-            
+            avaliacao = AvaliacaoDesastre.query.get_or_404(assessment_id)
+
             if 'files' not in request.files:
-                api.abort(400, 'No files provided')
-            
-            files = request.files.getlist('files')
-            uploaded_files = []
-            
-            # Ensure upload directory exists
-            upload_path = ensure_upload_dir()
-            
-            for file in files:
-                if file and file.filename and allowed_file(file.filename):
-                    filename = secure_filename(file.filename)
-                    # Add assessment ID to filename to avoid conflicts
-                    filename = f"{assessment_id}_{filename}"
-                    file_path = os.path.join(upload_path, filename)
-                    file.save(file_path)
-                    uploaded_files.append(f"{UPLOAD_FOLDER}/{filename}")
-            
-            # Update assessment with new evidence files
-            current_files = assessment.get_evidence_files()
-            current_files.extend(uploaded_files)
-            assessment.set_evidence_files(current_files)
-            
+                api.abort(400, 'Nenhum ficheiro fornecido')
+
+            ficheiros = request.files.getlist('files')
+            if not ficheiros or ficheiros[0].filename == '':
+                api.abort(400, 'Nenhum ficheiro selecionado')
+
+            # Limitar a 3 ficheiros
+            if len(ficheiros) > 3:
+                api.abort(400, 'Máximo de 3 ficheiros permitidos')
+
+            caminhos_salvos = []
+            pasta_upload = garantir_pasta_upload()
+
+            for ficheiro in ficheiros:
+                if ficheiro and ficheiro_permitido(ficheiro.filename):
+                    nome_ficheiro = secure_filename(ficheiro.filename)
+                    # Adicionar ID da avaliação ao nome do ficheiro para evitar conflitos
+                    nome_unico = f"{assessment_id}_{nome_ficheiro}"
+                    caminho_ficheiro = os.path.join(pasta_upload, nome_unico)
+                    ficheiro.save(caminho_ficheiro)
+                    caminhos_salvos.append(f"{PASTA_UPLOAD}/{nome_unico}")
+                else:
+                    api.abort(400, f'Tipo de ficheiro não permitido: {ficheiro.filename}')
+
+            # Atualizar a avaliação com os caminhos dos ficheiros
+            import json
+            ficheiros_existentes = json.loads(avaliacao.evidence_files) if avaliacao.evidence_files else []
+            ficheiros_existentes.extend(caminhos_salvos)
+            avaliacao.evidence_files = json.dumps(ficheiros_existentes)
+
             db.session.commit()
-            
+
             return {
-                'message': f'Uploaded {len(uploaded_files)} files',
-                'files': uploaded_files,
-                'assessment': assessment.to_dict()
-            }
+                'message': f'{len(caminhos_salvos)} ficheiro(s) carregado(s) com sucesso',
+                'files': caminhos_salvos
+            }, 201
+
         except Exception as e:
             db.session.rollback()
-            api.abort(500, str(e))
+            api.abort(500, f'Erro ao carregar ficheiros: {str(e)}')
 
 @api.route('/statistics')
-class AssessmentStatistics(Resource):
-    @api.doc('get_statistics')
-    @api.marshal_with(statistics_model)
+class RecursoEstatisticas(Resource):
+    @api.doc('obter_estatisticas')
+    @api.marshal_with(modelo_estatisticas)
     def get(self):
-        """Obter estatísticas sobre avaliações de desastres"""
+        """Obter estatísticas das avaliações"""
         try:
-            total_assessments = DisasterAssessment.query.count()
-            
-            # Damage level statistics
-            damage_stats = db.session.query(
-                DisasterAssessment.damage_level,
-                db.func.count(DisasterAssessment.id)
-            ).group_by(DisasterAssessment.damage_level).all()
-            
-            # Structure type statistics
-            structure_stats = db.session.query(
-                DisasterAssessment.structure_type,
-                db.func.count(DisasterAssessment.id)
-            ).group_by(DisasterAssessment.structure_type).all()
-            
-            # Urgent need statistics
-            urgent_need_stats = db.session.query(
-                DisasterAssessment.urgent_need,
-                db.func.count(DisasterAssessment.id)
-            ).group_by(DisasterAssessment.urgent_need).all()
-            
+            total_avaliacoes = AvaliacaoDesastre.query.count()
+
+            # Estatísticas por nível de danos
+            stats_nivel_danos = db.session.query(
+                AvaliacaoDesastre.damage_level,
+                db.func.count(AvaliacaoDesastre.id)
+            ).group_by(AvaliacaoDesastre.damage_level).all()
+
+            # Estatísticas por tipo de estrutura
+            stats_tipo_estrutura = db.session.query(
+                AvaliacaoDesastre.structure_type,
+                db.func.count(AvaliacaoDesastre.id)
+            ).group_by(AvaliacaoDesastre.structure_type).all()
+
+            # Estatísticas por necessidade urgente
+            stats_necessidade_urgente = db.session.query(
+                AvaliacaoDesastre.urgent_need,
+                db.func.count(AvaliacaoDesastre.id)
+            ).group_by(AvaliacaoDesastre.urgent_need).all()
+
             return {
-                'total_assessments': total_assessments,
-                'damage_level_stats': dict(damage_stats),
-                'structure_type_stats': dict(structure_stats),
-                'urgent_need_stats': dict(urgent_need_stats)
+                'total_assessments': total_avaliacoes,
+                'damage_level_stats': {nivel: count for nivel, count in stats_nivel_danos},
+                'structure_type_stats': {tipo: count for tipo, count in stats_tipo_estrutura},
+                'urgent_need_stats': {necessidade: count for necessidade, count in stats_necessidade_urgente}
             }
+
         except Exception as e:
-            api.abort(500, str(e))
+            api.abort(500, f'Erro ao obter estatísticas: {str(e)}')
 
 @api.route('/options')
-class AssessmentOptions(Resource):
-    @api.doc('get_options')
-    @api.marshal_with(options_model)
+class RecursoOpcoes(Resource):
+    @api.doc('obter_opcoes')
+    @api.marshal_with(modelo_opcoes)
     def get(self):
-        """Obter opções disponíveis para campos do formulário"""
+        """Obter opções disponíveis para os formulários"""
         return {
-            'vulnerable_groups': [
-                'bebe_crianca',
-                'idoso', 
-                'pessoa_deficiencia',
-                'doente_cronico'
-            ],
-            'structure_types': [
-                'habitacao',
-                'comercio',
-                'agricultura',
-                'outro'
-            ],
-            'damage_levels': [
-                'parcial',
-                'grave', 
-                'total'
-            ],
-            'loss_types': [
-                'alimentos',
-                'roupas_calcado',
-                'moveis',
-                'eletrodomesticos',
-                'documentos_pessoais',
-                'animais_domesticos',
-                'outros'
-            ],
-            'urgent_needs': [
-                'agua_potavel',
-                'alimentacao',
-                'abrigo_temporario',
-                'roupas_cobertores',
-                'medicamentos',
-                'outros'
-            ]
+            'vulnerable_groups': ['bebe_crianca', 'idoso', 'pessoa_deficiencia', 'doente_cronico'],
+            'structure_types': ['habitacao', 'comercio', 'agricultura', 'outro'],
+            'damage_levels': ['parcial', 'grave', 'total'],
+            'loss_types': ['alimentos', 'roupas_calcado', 'moveis', 'eletrodomesticos', 'documentos_pessoais', 'animais_domesticos', 'outros'],
+            'urgent_needs': ['agua_potavel', 'alimentacao', 'abrigo_temporario', 'roupas_cobertores', 'medicamentos', 'outros']
         }
-

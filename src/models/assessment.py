@@ -5,73 +5,87 @@ import json
 # Import db from user module
 from .user import db
 
-class DisasterAssessment(db.Model):
-    __tablename__ = 'disaster_assessments'
+class AvaliacaoDesastre(db.Model):
+    __tablename__ = 'avaliacoes_desastre'
     
     id = db.Column(db.Integer, primary_key=True)
-    responsible_name = db.Column(db.String(200), nullable=False)
-    document_number = db.Column(db.String(50), nullable=False)
-    phone_contact = db.Column(db.String(20), nullable=False)
-    household_members = db.Column(db.Integer, nullable=False)
-    vulnerable_groups = db.Column(db.Text)  # JSON string for list of vulnerable groups
-    full_address = db.Column(db.Text, nullable=False)
-    reference_point = db.Column(db.String(500))
-    gps_latitude = db.Column(db.Float)
-    gps_longitude = db.Column(db.Float)
-    structure_type = db.Column(db.String(50), nullable=False)
-    damage_level = db.Column(db.String(20), nullable=False)
-    losses = db.Column(db.Text)  # JSON string for list of losses
-    losses_other = db.Column(db.Text)
-    evidence_files = db.Column(db.Text)  # JSON string for list of file paths
-    urgent_need = db.Column(db.String(50), nullable=False)
-    urgent_need_other = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Identificação da Família
+    nome_responsavel = db.Column(db.String(200), nullable=False)  # Nome do Responsável
+    numero_documento = db.Column(db.String(50), nullable=False)    # Número de Documento (BI ou Passaporte)
+    contacto_telefonico = db.Column(db.String(20), nullable=False)      # Contacto Telefónico
+    membros_agregado = db.Column(db.Integer, nullable=False)     # N.º de Pessoas no Agregado Familiar
+    grupos_vulneraveis = db.Column(db.Text)  # JSON string: ['bebe_crianca', 'idoso', 'pessoa_deficiencia', 'doente_cronico']
+    
+    # Localização
+    endereco_completo = db.Column(db.Text, nullable=False)            # Endereço Completo
+    ponto_referencia = db.Column(db.String(500))                 # Ponto de Referência (opcional)
+    latitude_gps = db.Column(db.Float)                           # Latitude GPS
+    longitude_gps = db.Column(db.Float)                          # Longitude GPS
+    
+    # Tipo e Nível de Danos
+    tipo_estrutura = db.Column(db.String(50), nullable=False)    # ['habitacao', 'comercio', 'agricultura', 'outro']
+    nivel_danos = db.Column(db.String(20), nullable=False)      # ['parcial', 'grave', 'total']
+    
+    # Perdas
+    perdas = db.Column(db.Text)                                  # JSON string: tipos de perdas
+    outras_perdas = db.Column(db.Text)                            # Especificação de outras perdas
+    
+    # Provas
+    ficheiros_prova = db.Column(db.Text)                          # JSON string: caminhos dos ficheiros (até 3)
+    
+    # Necessidade Urgente
+    necessidade_urgente = db.Column(db.String(50), nullable=False)       # ['agua_potavel', 'alimentacao', 'abrigo_temporario', 'roupas_cobertores', 'medicamentos', 'outros']
+    outra_necessidade = db.Column(db.Text)                       # Especificação de outra necessidade
+    
+    # Timestamps
+    data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
+    data_atualizacao = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self):
-        return f'<DisasterAssessment {self.id} - {self.responsible_name}>'
+        return f'<AvaliacaoDesastre {self.id} - {self.nome_responsavel}>'
 
     def to_dict(self):
         return {
             'id': self.id,
-            'responsible_name': self.responsible_name,
-            'document_number': self.document_number,
-            'phone_contact': self.phone_contact,
-            'household_members': self.household_members,
-            'vulnerable_groups': json.loads(self.vulnerable_groups) if self.vulnerable_groups else [],
-            'full_address': self.full_address,
-            'reference_point': self.reference_point,
-            'gps_latitude': self.gps_latitude,
-            'gps_longitude': self.gps_longitude,
-            'structure_type': self.structure_type,
-            'damage_level': self.damage_level,
-            'losses': json.loads(self.losses) if self.losses else [],
-            'losses_other': self.losses_other,
-            'evidence_files': json.loads(self.evidence_files) if self.evidence_files else [],
-            'urgent_need': self.urgent_need,
-            'urgent_need_other': self.urgent_need_other,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+            'nome_responsavel': self.nome_responsavel,
+            'numero_documento': self.numero_documento,
+            'contacto_telefonico': self.contacto_telefonico,
+            'membros_agregado': self.membros_agregado,
+            'grupos_vulneraveis': json.loads(self.grupos_vulneraveis) if self.grupos_vulneraveis else [],
+            'endereco_completo': self.endereco_completo,
+            'ponto_referencia': self.ponto_referencia,
+            'latitude_gps': self.latitude_gps,
+            'longitude_gps': self.longitude_gps,
+            'tipo_estrutura': self.tipo_estrutura,
+            'nivel_danos': self.nivel_danos,
+            'perdas': json.loads(self.perdas) if self.perdas else [],
+            'outras_perdas': self.outras_perdas,
+            'ficheiros_prova': json.loads(self.ficheiros_prova) if self.ficheiros_prova else [],
+            'necessidade_urgente': self.necessidade_urgente,
+            'outra_necessidade': self.outra_necessidade,
+            'data_criacao': self.data_criacao.isoformat() if self.data_criacao else None,
+            'data_atualizacao': self.data_atualizacao.isoformat() if self.data_atualizacao else None
         }
 
     @classmethod
     def from_dict(cls, data):
-        """Create a DisasterAssessment instance from a dictionary"""
+        """Criar uma instância de AvaliacaoDesastre a partir de um dicionário"""
         assessment = cls()
-        assessment.responsible_name = data.get('responsible_name')
-        assessment.document_number = data.get('document_number')
-        assessment.phone_contact = data.get('phone_contact')
-        assessment.household_members = data.get('household_members')
-        assessment.vulnerable_groups = json.dumps(data.get('vulnerable_groups', []))
-        assessment.full_address = data.get('full_address')
-        assessment.reference_point = data.get('reference_point')
-        assessment.gps_latitude = data.get('gps_latitude')
-        assessment.gps_longitude = data.get('gps_longitude')
-        assessment.structure_type = data.get('structure_type')
-        assessment.damage_level = data.get('damage_level')
-        assessment.losses = json.dumps(data.get('losses', []))
-        assessment.losses_other = data.get('losses_other')
-        assessment.evidence_files = json.dumps(data.get('evidence_files', []))
-        assessment.urgent_need = data.get('urgent_need')
-        assessment.urgent_need_other = data.get('urgent_need_other')
+        assessment.nome_responsavel = data.get('nome_responsavel')
+        assessment.numero_documento = data.get('numero_documento')
+        assessment.contacto_telefonico = data.get('contacto_telefonico')
+        assessment.membros_agregado = data.get('membros_agregado')
+        assessment.grupos_vulneraveis = json.dumps(data.get('grupos_vulneraveis', []))
+        assessment.endereco_completo = data.get('endereco_completo')
+        assessment.ponto_referencia = data.get('ponto_referencia')
+        assessment.latitude_gps = data.get('latitude_gps')
+        assessment.longitude_gps = data.get('longitude_gps')
+        assessment.tipo_estrutura = data.get('tipo_estrutura')
+        assessment.nivel_danos = data.get('nivel_danos')
+        assessment.perdas = json.dumps(data.get('perdas', []))
+        assessment.outras_perdas = data.get('outras_perdas')
+        assessment.ficheiros_prova = json.dumps(data.get('ficheiros_prova', []))
+        assessment.necessidade_urgente = data.get('necessidade_urgente')
+        assessment.outra_necessidade = data.get('outra_necessidade')
         return assessment
