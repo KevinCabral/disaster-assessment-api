@@ -108,11 +108,11 @@ class ListaAvaliacoes(Resource):
             query = AvaliacaoDesastre.query
 
             if nivel_danos:
-                query = query.filter(AvaliacaoDesastre.damage_level == nivel_danos)
+                query = query.filter(AvaliacaoDesastre.nivel_danos == nivel_danos)
             if tipo_estrutura:
-                query = query.filter(AvaliacaoDesastre.structure_type == tipo_estrutura)
+                query = query.filter(AvaliacaoDesastre.tipo_estrutura == tipo_estrutura)
             if necessidade_urgente:
-                query = query.filter(AvaliacaoDesastre.urgent_need == necessidade_urgente)
+                query = query.filter(AvaliacaoDesastre.necessidade_urgente == necessidade_urgente)
 
             avaliacoes = query.paginate(
                 page=pagina, per_page=por_pagina, error_out=False
@@ -121,7 +121,7 @@ class ListaAvaliacoes(Resource):
             return [avaliacao.to_dict() for avaliacao in avaliacoes.items]
 
         except Exception as e:
-            api.abort(500, f'Erro interno do servidor: {str(e)}')
+            return {'error': f'Erro interno do servidor: {str(e)}'}, 500
 
     @api.doc('criar_avaliacao')
     @api.expect(entrada_avaliacao)
@@ -131,18 +131,31 @@ class ListaAvaliacoes(Resource):
         try:
             data = api.payload
             if not data:
-                api.abort(400, 'Dados não fornecidos')
+                return {'error': 'Dados não fornecidos'}, 400
 
             # Validar campos obrigatórios
             campos_obrigatorios = [
-                'responsible_name', 'document_number', 'phone_contact',
-                'household_members', 'full_address', 'structure_type',
-                'damage_level', 'urgent_need'
+                'nome_responsavel', 'numero_documento', 'contacto_telefonico',
+                'membros_agregado', 'endereco_completo', 'tipo_estrutura',
+                'nivel_danos', 'necessidade_urgente'
             ]
 
+            campos_em_falta = []
             for campo in campos_obrigatorios:
-                if not data.get(campo):
-                    api.abort(400, f'Campo obrigatório em falta: {campo}')
+                valor = data.get(campo)
+                # Special handling for numeric fields that can be 0
+                if campo == 'membros_agregado':
+                    if valor is None:
+                        campos_em_falta.append(campo)
+                else:
+                    if not valor:
+                        campos_em_falta.append(campo)
+            
+            if campos_em_falta:
+                return {
+                    'error': 'Campos obrigatórios em falta',
+                    'campos_em_falta': campos_em_falta
+                }, 400
 
             avaliacao = AvaliacaoDesastre.from_dict(data)
             db.session.add(avaliacao)
@@ -152,7 +165,7 @@ class ListaAvaliacoes(Resource):
 
         except Exception as e:
             db.session.rollback()
-            api.abort(500, f'Erro ao criar avaliação: {str(e)}')
+            return {'error': f'Erro ao criar avaliação: {str(e)}'}, 500
 
 @api.route('/<int:assessment_id>')
 class RecursoAvaliacao(Resource):
@@ -161,10 +174,12 @@ class RecursoAvaliacao(Resource):
     def get(self, assessment_id):
         """Obter uma avaliação específica pelo ID"""
         try:
-            avaliacao = AvaliacaoDesastre.query.get_or_404(assessment_id)
+            avaliacao = AvaliacaoDesastre.query.get(assessment_id)
+            if not avaliacao:
+                return {'error': 'Avaliação não encontrada'}, 404
             return avaliacao.to_dict()
         except Exception as e:
-            api.abort(500, f'Erro ao obter avaliação: {str(e)}')
+            return {'error': f'Erro ao obter avaliação: {str(e)}'}, 500
 
     @api.doc('atualizar_avaliacao')
     @api.expect(entrada_avaliacao)
@@ -172,11 +187,13 @@ class RecursoAvaliacao(Resource):
     def put(self, assessment_id):
         """Atualizar uma avaliação existente"""
         try:
-            avaliacao = AvaliacaoDesastre.query.get_or_404(assessment_id)
+            avaliacao = AvaliacaoDesastre.query.get(assessment_id)
+            if not avaliacao:
+                return {'error': 'Avaliação não encontrada'}, 404
+                
             data = api.payload
-
             if not data:
-                api.abort(400, 'Dados não fornecidos')
+                return {'error': 'Dados não fornecidos'}, 400
 
             # Atualizar a avaliação com os novos dados
             avaliacao_atualizada = AvaliacaoDesastre.from_dict(data)
@@ -189,19 +206,22 @@ class RecursoAvaliacao(Resource):
 
         except Exception as e:
             db.session.rollback()
-            api.abort(500, f'Erro ao atualizar avaliação: {str(e)}')
+            return {'error': f'Erro ao atualizar avaliação: {str(e)}'}, 500
 
     @api.doc('eliminar_avaliacao')
     def delete(self, assessment_id):
         """Eliminar uma avaliação"""
         try:
-            avaliacao = AvaliacaoDesastre.query.get_or_404(assessment_id)
+            avaliacao = AvaliacaoDesastre.query.get(assessment_id)
+            if not avaliacao:
+                return {'error': 'Avaliação não encontrada'}, 404
+                
             db.session.delete(avaliacao)
             db.session.commit()
             return {'message': 'Avaliação eliminada com sucesso'}, 200
         except Exception as e:
             db.session.rollback()
-            api.abort(500, f'Erro ao eliminar avaliação: {str(e)}')
+            return {'error': f'Erro ao eliminar avaliação: {str(e)}'}, 500
 
 @api.route('/<int:assessment_id>/evidence')
 class CarregarProvas(Resource):
@@ -238,9 +258,9 @@ class CarregarProvas(Resource):
 
             # Atualizar a avaliação com os caminhos dos ficheiros
             import json
-            ficheiros_existentes = json.loads(avaliacao.evidence_files) if avaliacao.evidence_files else []
+            ficheiros_existentes = json.loads(avaliacao.ficheiros_prova) if avaliacao.ficheiros_prova else []
             ficheiros_existentes.extend(caminhos_salvos)
-            avaliacao.evidence_files = json.dumps(ficheiros_existentes)
+            avaliacao.ficheiros_prova = json.dumps(ficheiros_existentes)
 
             db.session.commit()
 
@@ -264,27 +284,27 @@ class RecursoEstatisticas(Resource):
 
             # Estatísticas por nível de danos
             stats_nivel_danos = db.session.query(
-                AvaliacaoDesastre.damage_level,
+                AvaliacaoDesastre.nivel_danos,
                 db.func.count(AvaliacaoDesastre.id)
-            ).group_by(AvaliacaoDesastre.damage_level).all()
+            ).group_by(AvaliacaoDesastre.nivel_danos).all()
 
             # Estatísticas por tipo de estrutura
             stats_tipo_estrutura = db.session.query(
-                AvaliacaoDesastre.structure_type,
+                AvaliacaoDesastre.tipo_estrutura,
                 db.func.count(AvaliacaoDesastre.id)
-            ).group_by(AvaliacaoDesastre.structure_type).all()
+            ).group_by(AvaliacaoDesastre.tipo_estrutura).all()
 
             # Estatísticas por necessidade urgente
             stats_necessidade_urgente = db.session.query(
-                AvaliacaoDesastre.urgent_need,
+                AvaliacaoDesastre.necessidade_urgente,
                 db.func.count(AvaliacaoDesastre.id)
-            ).group_by(AvaliacaoDesastre.urgent_need).all()
+            ).group_by(AvaliacaoDesastre.necessidade_urgente).all()
 
             return {
-                'total_assessments': total_avaliacoes,
-                'damage_level_stats': {nivel: count for nivel, count in stats_nivel_danos},
-                'structure_type_stats': {tipo: count for tipo, count in stats_tipo_estrutura},
-                'urgent_need_stats': {necessidade: count for necessidade, count in stats_necessidade_urgente}
+                'total_avaliacoes': total_avaliacoes,
+                'estatisticas_nivel_danos': {nivel: count for nivel, count in stats_nivel_danos},
+                'estatisticas_tipo_estrutura': {tipo: count for tipo, count in stats_tipo_estrutura},
+                'estatisticas_necessidade_urgente': {necessidade: count for necessidade, count in stats_necessidade_urgente}
             }
 
         except Exception as e:
@@ -297,9 +317,9 @@ class RecursoOpcoes(Resource):
     def get(self):
         """Obter opções disponíveis para os formulários"""
         return {
-            'vulnerable_groups': ['bebe_crianca', 'idoso', 'pessoa_deficiencia', 'doente_cronico'],
-            'structure_types': ['habitacao', 'comercio', 'agricultura', 'outro'],
-            'damage_levels': ['parcial', 'grave', 'total'],
-            'loss_types': ['alimentos', 'roupas_calcado', 'moveis', 'eletrodomesticos', 'documentos_pessoais', 'animais_domesticos', 'outros'],
-            'urgent_needs': ['agua_potavel', 'alimentacao', 'abrigo_temporario', 'roupas_cobertores', 'medicamentos', 'outros']
+            'grupos_vulneraveis': ['bebe_crianca', 'idoso', 'pessoa_deficiencia', 'doente_cronico'],
+            'tipos_estrutura': ['habitacao', 'comercio', 'agricultura', 'outro'],
+            'niveis_danos': ['parcial', 'grave', 'total'],
+            'tipos_perdas': ['alimentos', 'roupas_calcado', 'moveis', 'eletrodomesticos', 'documentos_pessoais', 'animais_domesticos', 'outros'],
+            'necessidades_urgentes': ['agua_potavel', 'alimentacao', 'abrigo_temporario', 'roupas_cobertores', 'medicamentos', 'outros']
         }
