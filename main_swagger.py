@@ -9,6 +9,7 @@ from flask_restx import Api
 from src.models.user import db
 from src.models.assessment import AvaliacaoDesastre
 from src.routes.assessment_swagger import api as api_avaliacoes
+from src.routes.auth import api as api_autenticacao
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static'))
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
@@ -28,6 +29,7 @@ api = Api(
 
 # Adicionar namespaces
 api.add_namespace(api_avaliacoes, path='/avaliacoes')
+api.add_namespace(api_autenticacao, path='/autenticacao')
 
 # Configuração da base de dados
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'database', 'disaster_assessment.db')}"

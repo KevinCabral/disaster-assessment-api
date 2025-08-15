@@ -8,7 +8,7 @@ import sys
 # Add the project root to the path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from src.models.user import db, Usuario
+from src.models.user import db, Usuario, TipoUtilizador
 from src.models.assessment import AvaliacaoDesastre
 from flask import Flask
 
@@ -47,6 +47,33 @@ def migrate_database():
         db.create_all()
         print("Created new tables with Portuguese field names")
         
+        # Add a sample admin user
+        admin_user = Usuario()
+        admin_user.nome = "Administrador Sistema"
+        admin_user.email = "admin@sistema.pt"
+        admin_user.definir_senha("admin123")
+        admin_user.papel = TipoUtilizador.ADMIN
+        
+        db.session.add(admin_user)
+        
+        # Add a sample coordinator
+        coordinator = Usuario()
+        coordinator.nome = "João Coordenador"
+        coordinator.email = "coordenador@sistema.pt"
+        coordinator.definir_senha("coord123")
+        coordinator.papel = TipoUtilizador.COORDENADOR
+        
+        db.session.add(coordinator)
+        
+        # Add a sample field worker
+        field_worker = Usuario()
+        field_worker.nome = "Maria Terreno"
+        field_worker.email = "terreno@sistema.pt"
+        field_worker.definir_senha("campo123")
+        field_worker.papel = TipoUtilizador.TRABALHADOR_TERRENO
+        
+        db.session.add(field_worker)
+        
         # Add a sample assessment for testing
         sample_assessment = AvaliacaoDesastre()
         sample_assessment.nome_responsavel = "João Silva"
@@ -70,11 +97,17 @@ def migrate_database():
         db.session.commit()
         
         print("Added sample assessment data")
+        print("Added sample users:")
+        print("- Admin: admin@sistema.pt / admin123")
+        print("- Coordenador: coordenador@sistema.pt / coord123") 
+        print("- Trabalhador Terreno: terreno@sistema.pt / campo123")
         print("Database migration completed successfully!")
         
         # Verify the data
         assessments = AvaliacaoDesastre.query.all()
+        users = Usuario.query.all()
         print(f"Total assessments in database: {len(assessments)}")
+        print(f"Total users in database: {len(users)}")
         
         if assessments:
             sample = assessments[0]
