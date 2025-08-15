@@ -4,49 +4,13 @@ from src.models.user import db, Usuario, TipoUtilizador
 import jwt
 from datetime import datetime, timedelta
 import os
-import secrets
-import string
 
 # Criar namespace para autenticação
-api = Namespace('autenticacao', 
-                description='Operações de Autenticação e Gestão de Utilizadores',
-                authorizations={
-                    'Bearer': {
-                        'type': 'apiKey',
-                        'in': 'header',
-                        'name': 'Authorization',
-                        'description': 'Digite: Bearer <token>'
-                    }
-                })
+api = Namespace('autenticacao', description='Operações de Autenticação e Gestão de Utilizadores')
 
 # Chave secreta para JWT (em produção, usar variável de ambiente)
 JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'chave-secreta-jwt-desenvolvimento')
 JWT_EXPIRATION_HOURS = 24
-
-# Simulação de armazenamento temporário para códigos de reset (em produção, usar Redis ou base de dados)
-codigos_reset = {}
-
-def gerar_codigo_reset():
-    """Gerar código de reset de 6 dígitos"""
-    return ''.join(secrets.choice(string.digits) for _ in range(6))
-
-def enviar_email_reset(email, codigo):
-    """Simular envio de email com código de reset (em produção, integrar com serviço de email)"""
-    print(f"EMAIL SIMULADO para {email}: Seu código de reset é: {codigo}")
-    print(f"Este código expira em 30 minutos.")
-    return True
-
-def validar_senha(senha):
-    """Validar força da senha"""
-    if len(senha) < 8:
-        return False, "Senha deve ter pelo menos 8 caracteres"
-    if not any(c.isupper() for c in senha):
-        return False, "Senha deve conter pelo menos uma letra maiúscula"
-    if not any(c.islower() for c in senha):
-        return False, "Senha deve conter pelo menos uma letra minúscula"
-    if not any(c.isdigit() for c in senha):
-        return False, "Senha deve conter pelo menos um número"
-    return True, "Senha válida"
 
 # Modelos Swagger para autenticação
 modelo_login = api.model('Login', {
@@ -84,30 +48,8 @@ modelo_verificar_token = api.model('VerificarToken', {
 
 modelo_resposta_verificacao = api.model('RespostaVerificacao', {
     'valido': fields.Boolean(description='Se o token é válido'),
-    'utilizador': fields.Nested(modelo_utilizador, description='Dados do utilizador (se válido)'),
-    'mensagem': fields.String(description='Mensagem de status')
-})
-
-modelo_atualizar_senha = api.model('AtualizarSenha', {
-    'senha_atual': fields.String(required=True, description='Senha atual do utilizador (para verificação)'),
-    'senha_nova': fields.String(required=True, description='Nova senha do utilizador (min. 8 caracteres)'),
-    'confirmar_senha': fields.String(required=True, description='Confirmação da nova senha (deve ser igual à nova senha)')
-})
-
-modelo_solicitar_reset = api.model('SolicitarReset', {
-    'email': fields.String(required=True, description='Email do utilizador para reset')
-})
-
-modelo_reset_senha = api.model('ResetSenha', {
-    'email': fields.String(required=True, description='Email do utilizador'),
-    'codigo_reset': fields.String(required=True, description='Código de reset recebido por email'),
-    'senha_nova': fields.String(required=True, description='Nova senha do utilizador'),
-    'confirmar_senha': fields.String(required=True, description='Confirmação da nova senha')
-})
-
-modelo_resposta_reset = api.model('RespostaReset', {
-    'mensagem': fields.String(description='Mensagem de confirmação'),
-    'codigo_enviado': fields.Boolean(description='Se o código foi enviado com sucesso')
+    'utilizador': fields.Nested(modelo_utilizador, description='Dados do utilizador'),
+    'expira_em': fields.DateTime(description='Data de expiração do token')
 })
 
 def gerar_token(utilizador):
@@ -234,15 +176,10 @@ class VerificarToken(Resource):
                 if not auth_header:
                     return {'error': 'Token deve ser fornecido no campo "token" ou no header Authorization'}, 400
                 
-                # Support both "Bearer token" and just "token" formats
-                if auth_header.startswith('Bearer '):
-                    try:
-                        token = auth_header.split(' ')[1]  # Remove "Bearer "
-                    except IndexError:
-                        return {'error': 'Formato de token inválido no header. Use: Bearer <token>'}, 400
-                else:
-                    # If no "Bearer " prefix, assume the entire header is the token
-                    token = auth_header
+                try:
+                    token = auth_header.split(' ')[1]  # Remove "Bearer "
+                except IndexError:
+                    return {'error': 'Formato de token inválido no header. Use: Bearer <token>'}, 400
             
             if not token:
                 return {'error': 'Token não fornecido'}, 400
@@ -353,185 +290,3 @@ class RecursoUtilizador(Resource):
         except Exception as e:
             db.session.rollback()
             return {'error': f'Erro ao eliminar utilizador: {str(e)}'}, 500
-
-@api.route('/atualizar-senha')
-class AtualizarSenha(Resource):
-    @api.doc('atualizar_senha', 
-             description='Atualizar senha do utilizador autenticado. Requer token Bearer no header Authorization.',
-             security='Bearer')
-    @api.expect(modelo_atualizar_senha)
-    def put(self):
-        """Atualizar senha do utilizador autenticado"""
-        try:
-            # Verificar token de autorização
-            auth_header = request.headers.get('Authorization')
-            if not auth_header:
-                return {'error': 'Token de autorização não fornecido'}, 401
-            
-            # Support both "Bearer token" and just "token" formats
-            if auth_header.startswith('Bearer '):
-                token = auth_header.split(' ')[1]
-            else:
-                # If no "Bearer " prefix, assume the entire header is the token
-                token = auth_header
-            payload = verificar_token(token)
-            
-            if not payload:
-                return {'error': 'Token inválido ou expirado'}, 401
-            
-            # Obter dados da requisição
-            data = api.payload
-            if not data:
-                return {'error': 'Dados não fornecidos'}, 400
-            
-            # Validar campos obrigatórios
-            campos_obrigatorios = ['senha_atual', 'senha_nova', 'confirmar_senha']
-            for campo in campos_obrigatorios:
-                if not data.get(campo):
-                    return {'error': f'Campo obrigatório: {campo}'}, 400
-            
-            # Verificar se as senhas novas coincidem
-            if data['senha_nova'] != data['confirmar_senha']:
-                return {'error': 'Confirmação de senha não confere'}, 400
-            
-            # Validar força da nova senha
-            senha_valida, mensagem = validar_senha(data['senha_nova'])
-            if not senha_valida:
-                return {'error': mensagem}, 400
-            
-            # Obter utilizador
-            utilizador = Usuario.query.get(payload['utilizador_id'])
-            if not utilizador:
-                return {'error': 'Utilizador não encontrado'}, 404
-            
-            # Verificar senha atual
-            if not utilizador.verificar_senha(data['senha_atual']):
-                return {'error': 'Senha atual incorreta'}, 400
-            
-            # Atualizar senha
-            utilizador.definir_senha(data['senha_nova'])
-            db.session.commit()
-            
-            return {'message': 'Senha atualizada com sucesso'}, 200
-            
-        except Exception as e:
-            db.session.rollback()
-            return {'error': f'Erro ao atualizar senha: {str(e)}'}, 500
-
-@api.route('/solicitar-reset-senha')
-class SolicitarResetSenha(Resource):
-    @api.doc('solicitar_reset_senha')
-    @api.expect(modelo_solicitar_reset)
-    @api.marshal_with(modelo_resposta_reset)
-    def post(self):
-        """Solicitar reset de senha por email"""
-        try:
-            data = api.payload
-            if not data or not data.get('email'):
-                return {'mensagem': 'Email é obrigatório', 'codigo_enviado': False}, 400
-            
-            email = data['email']
-            
-            # Verificar se utilizador existe
-            utilizador = Usuario.query.filter_by(email=email).first()
-            if not utilizador:
-                # Por segurança, não revelamos se o email existe ou não
-                return {
-                    'mensagem': 'Se o email existir no sistema, receberá um código de reset',
-                    'codigo_enviado': True
-                }, 200
-            
-            # Gerar código de reset
-            codigo = gerar_codigo_reset()
-            
-            # Armazenar código temporariamente (expires em 30 minutos)
-            expiracao = datetime.utcnow() + timedelta(minutes=30)
-            codigos_reset[email] = {
-                'codigo': codigo,
-                'expiracao': expiracao,
-                'utilizador_id': utilizador.id
-            }
-            
-            # Enviar email (simulado)
-            sucesso_envio = enviar_email_reset(email, codigo)
-            
-            if sucesso_envio:
-                return {
-                    'mensagem': 'Código de reset enviado para o email',
-                    'codigo_enviado': True
-                }, 200
-            else:
-                return {
-                    'mensagem': 'Erro ao enviar email',
-                    'codigo_enviado': False
-                }, 500
-                
-        except Exception as e:
-            return {
-                'mensagem': f'Erro ao processar solicitação: {str(e)}',
-                'codigo_enviado': False
-            }, 500
-
-@api.route('/reset-senha')
-class ResetSenha(Resource):
-    @api.doc('reset_senha')
-    @api.expect(modelo_reset_senha)
-    def post(self):
-        """Resetar senha usando código recebido por email"""
-        try:
-            data = api.payload
-            if not data:
-                return {'error': 'Dados não fornecidos'}, 400
-            
-            # Validar campos obrigatórios
-            campos_obrigatorios = ['email', 'codigo_reset', 'senha_nova', 'confirmar_senha']
-            for campo in campos_obrigatorios:
-                if not data.get(campo):
-                    return {'error': f'Campo obrigatório: {campo}'}, 400
-            
-            email = data['email']
-            codigo_fornecido = data['codigo_reset']
-            senha_nova = data['senha_nova']
-            confirmar_senha = data['confirmar_senha']
-            
-            # Verificar se as senhas coincidem
-            if senha_nova != confirmar_senha:
-                return {'error': 'Confirmação de senha não confere'}, 400
-            
-            # Validar força da nova senha
-            senha_valida, mensagem = validar_senha(senha_nova)
-            if not senha_valida:
-                return {'error': mensagem}, 400
-            
-            # Verificar código de reset
-            if email not in codigos_reset:
-                return {'error': 'Código de reset inválido ou expirado'}, 400
-            
-            codigo_data = codigos_reset[email]
-            
-            # Verificar se código não expirou
-            if datetime.utcnow() > codigo_data['expiracao']:
-                del codigos_reset[email]
-                return {'error': 'Código de reset expirado'}, 400
-            
-            # Verificar se código está correto
-            if codigo_data['codigo'] != codigo_fornecido:
-                return {'error': 'Código de reset incorreto'}, 400
-            
-            # Obter utilizador
-            utilizador = Usuario.query.get(codigo_data['utilizador_id'])
-            if not utilizador:
-                return {'error': 'Utilizador não encontrado'}, 404
-            
-            # Atualizar senha
-            utilizador.definir_senha(senha_nova)
-            db.session.commit()
-            
-            # Remover código usado
-            del codigos_reset[email]
-            
-            return {'message': 'Senha resetada com sucesso'}, 200
-            
-        except Exception as e:
-            db.session.rollback()
-            return {'error': f'Erro ao resetar senha: {str(e)}'}, 500

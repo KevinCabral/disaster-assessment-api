@@ -3,90 +3,10 @@ from flask_restx import Namespace, Resource, fields
 from src.models.user import db
 from src.models.assessment import AvaliacaoDesastre
 import os
-import jwt
-from datetime import datetime
 from werkzeug.utils import secure_filename
 
-# JWT configuration
-JWT_SECRET_KEY = 'sua-chave-secreta-super-segura-aqui-2024!'
-JWT_ALGORITHM = 'HS256'
-
-def verificar_token_auth():
-    """Verificar token JWT para autenticação nos endpoints"""
-    auth_header = request.headers.get('Authorization')
-    if not auth_header:
-        return None, 'Token de autorização não fornecido'
-    
-    # Support both "Bearer token" and just "token" formats
-    if auth_header.startswith('Bearer '):
-        token = auth_header.split(' ')[1]
-    else:
-        # If no "Bearer " prefix, assume the entire header is the token
-        token = auth_header
-    
-    try:
-        from src.models.user import Usuario
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
-        utilizador_id = payload.get('utilizador_id')
-        
-        if not utilizador_id:
-            return None, 'Token inválido - ID do utilizador não encontrado'
-        
-        utilizador = Usuario.query.get(utilizador_id)
-        if not utilizador:
-            return None, 'Utilizador não encontrado'
-        
-        return utilizador, None
-    except jwt.ExpiredSignatureError:
-        return None, 'Token expirado'
-    except jwt.InvalidTokenError:
-        return None, 'Token inválido'
-    except Exception:
-        return None, 'Erro ao verificar token'
-
-def verificar_token_auth():
-    """Verificar token JWT e retornar utilizador autenticado"""
-    auth_header = request.headers.get('Authorization')
-    if not auth_header:
-        return None, 'Token de autorização não fornecido'
-    
-    # Support both "Bearer token" and just "token" formats
-    if auth_header.startswith('Bearer '):
-        token = auth_header.split(' ')[1]
-    else:
-        # If no "Bearer " prefix, assume the entire header is the token
-        token = auth_header
-    
-    try:
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
-        utilizador_id = payload.get('utilizador_id')
-        
-        if not utilizador_id:
-            return None, 'Token inválido - ID do utilizador não encontrado'
-        
-        # Import here to avoid circular import
-        from src.models.user import Usuario
-        utilizador = Usuario.query.get(utilizador_id)
-        if not utilizador:
-            return None, 'Utilizador não encontrado'
-        
-        return utilizador, None
-    except jwt.ExpiredSignatureError:
-        return None, 'Token expirado'
-    except jwt.InvalidTokenError:
-        return None, 'Token inválido'
-
 # Criar namespace para avaliações de desastres
-api = Namespace('avaliacoes', 
-                description='Operações de Avaliação de Desastres',
-                authorizations={
-                    'Bearer': {
-                        'type': 'apiKey',
-                        'in': 'header',
-                        'name': 'Authorization',
-                        'description': 'Digite: Bearer <token>'
-                    }
-                })
+api = Namespace('avaliacoes', description='Operações de Avaliação de Desastres')
 
 # Configuração para carregamento de ficheiros
 PASTA_UPLOAD = 'uploads/evidence'
@@ -169,9 +89,7 @@ modelo_opcoes = api.model('Opcoes', {
 
 @api.route('')
 class ListaAvaliacoes(Resource):
-    @api.doc('listar_avaliacoes',
-             description='Listar todas as avaliações de desastre. Requer autenticação.',
-             security='Bearer')
+    @api.doc('listar_avaliacoes')
     @api.param('page', 'Número da página', type='integer', default=1)
     @api.param('per_page', 'Itens por página', type='integer', default=10)
     @api.param('damage_level', 'Filtrar por nível de danos', enum=['parcial', 'grave', 'total'])
@@ -180,11 +98,6 @@ class ListaAvaliacoes(Resource):
     @api.marshal_with(assessment_model, as_list=True)
     def get(self):
         """Listar todas as avaliações de desastre"""
-        # Verificar autenticação
-        utilizador, erro = verificar_token_auth()
-        if erro:
-            api.abort(401, erro)
-            
         try:
             pagina = request.args.get('page', 1, type=int)
             por_pagina = request.args.get('per_page', 10, type=int)
@@ -208,20 +121,13 @@ class ListaAvaliacoes(Resource):
             return [avaliacao.to_dict() for avaliacao in avaliacoes.items]
 
         except Exception as e:
-            api.abort(500, f'Erro interno do servidor: {str(e)}')
+            return {'error': f'Erro interno do servidor: {str(e)}'}, 500
 
-    @api.doc('criar_avaliacao',
-             description='Criar uma nova avaliação de desastre. Requer autenticação.',
-             security='Bearer')
+    @api.doc('criar_avaliacao')
     @api.expect(entrada_avaliacao)
     @api.marshal_with(assessment_model, code=201)
     def post(self):
         """Criar uma nova avaliação de desastre"""
-        # Verificar autenticação
-        utilizador, erro = verificar_token_auth()
-        if erro:
-            api.abort(401, erro)
-            
         try:
             data = api.payload
             if not data:
@@ -257,41 +163,31 @@ class ListaAvaliacoes(Resource):
 
 @api.route('/<int:assessment_id>')
 class RecursoAvaliacao(Resource):
-    @api.doc('obter_avaliacao',
-             description='Obter uma avaliação específica pelo ID. Requer autenticação.',
-             security='Bearer')
+    @api.doc('obter_avaliacao')
     @api.marshal_with(assessment_model)
     def get(self, assessment_id):
         """Obter uma avaliação específica pelo ID"""
-        # Verificar autenticação
-        utilizador, erro = verificar_token_auth()
-        if erro:
-            api.abort(401, erro)
-            
         try:
-            avaliacao = AvaliacaoDesastre.query.get_or_404(assessment_id)
+            avaliacao = AvaliacaoDesastre.query.get(assessment_id)
+            if not avaliacao:
+                return {'error': 'Avaliação não encontrada'}, 404
             return avaliacao.to_dict()
         except Exception as e:
-            api.abort(500, f'Erro ao obter avaliação: {str(e)}')
+            return {'error': f'Erro ao obter avaliação: {str(e)}'}, 500
 
-    @api.doc('atualizar_avaliacao',
-             description='Atualizar uma avaliação existente. Requer autenticação.',
-             security='Bearer')
+    @api.doc('atualizar_avaliacao')
     @api.expect(entrada_avaliacao)
     @api.marshal_with(assessment_model)
     def put(self, assessment_id):
         """Atualizar uma avaliação existente"""
         try:
-            # Verificar autenticação
-            utilizador, erro = verificar_token_auth()
-            if erro:
-                api.abort(401, erro)
+            avaliacao = AvaliacaoDesastre.query.get(assessment_id)
+            if not avaliacao:
+                return {'error': 'Avaliação não encontrada'}, 404
                 
-            avaliacao = AvaliacaoDesastre.query.get_or_404(assessment_id)
             data = api.payload
-
             if not data:
-                api.abort(400, 'Dados não fornecidos')
+                return {'error': 'Dados não fornecidos'}, 400
 
             # Atualizar a avaliação com os novos dados
             avaliacao_atualizada = AvaliacaoDesastre.from_dict(data)
@@ -304,18 +200,12 @@ class RecursoAvaliacao(Resource):
 
         except Exception as e:
             db.session.rollback()
-            api.abort(500, f'Erro ao atualizar avaliação: {str(e)}')
+            return {'error': f'Erro ao atualizar avaliação: {str(e)}'}, 500
 
-    @api.doc('eliminar_avaliacao',
-             description='Eliminar uma avaliação. Requer autenticação.',
-             security='Bearer')
+    @api.doc('eliminar_avaliacao')
     def delete(self, assessment_id):
         """Eliminar uma avaliação"""
         try:
-            # Verificar autenticação
-            utilizador, erro = verificar_token_auth()
-            if erro:
-                api.abort(401, erro)
             avaliacao = AvaliacaoDesastre.query.get(assessment_id)
             if not avaliacao:
                 return {'error': 'Avaliação não encontrada'}, 404
@@ -329,16 +219,10 @@ class RecursoAvaliacao(Resource):
 
 @api.route('/<int:assessment_id>/evidence')
 class CarregarProvas(Resource):
-    @api.doc('carregar_provas',
-             description='Carregar ficheiros de prova para uma avaliação. Requer autenticação.',
-             security='Bearer')
+    @api.doc('carregar_provas')
     def post(self, assessment_id):
         """Carregar ficheiros de prova para uma avaliação"""
         try:
-            # Verificar autenticação
-            utilizador, erro = verificar_token_auth()
-            if erro:
-                api.abort(401, erro)
             avaliacao = AvaliacaoDesastre.query.get_or_404(assessment_id)
 
             if 'files' not in request.files:
@@ -385,17 +269,11 @@ class CarregarProvas(Resource):
 
 @api.route('/statistics')
 class RecursoEstatisticas(Resource):
-    @api.doc('obter_estatisticas',
-             description='Obter estatísticas das avaliações. Requer autenticação.',
-             security='Bearer')
+    @api.doc('obter_estatisticas')
     @api.marshal_with(modelo_estatisticas)
     def get(self):
         """Obter estatísticas das avaliações"""
         try:
-            # Verificar autenticação
-            utilizador, erro = verificar_token_auth()
-            if erro:
-                api.abort(401, erro)
             total_avaliacoes = AvaliacaoDesastre.query.count()
 
             # Estatísticas por nível de danos
@@ -428,17 +306,10 @@ class RecursoEstatisticas(Resource):
 
 @api.route('/options')
 class RecursoOpcoes(Resource):
-    @api.doc('obter_opcoes',
-             description='Obter opções disponíveis para os formulários. Requer autenticação.',
-             security='Bearer')
+    @api.doc('obter_opcoes')
     @api.marshal_with(modelo_opcoes)
     def get(self):
         """Obter opções disponíveis para os formulários"""
-        # Verificar autenticação
-        utilizador, erro = verificar_token_auth()
-        if erro:
-            api.abort(401, erro)
-            
         return {
             'grupos_vulneraveis': ['bebe_crianca', 'idoso', 'pessoa_deficiencia', 'doente_cronico'],
             'tipos_estrutura': ['habitacao', 'comercio', 'agricultura', 'outro'],
