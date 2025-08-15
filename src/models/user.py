@@ -1,8 +1,10 @@
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 import uuid
 import enum
+import jwt
+import secrets
 
 db = SQLAlchemy()
 
@@ -22,6 +24,10 @@ class Usuario(db.Model):
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     data_atualizacao = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
+    # Campos para reset de password
+    token_reset_senha = db.Column(db.String(255), nullable=True)  # Token para reset de senha
+    expiracao_token_reset = db.Column(db.DateTime, nullable=True)  # Expiração do token
+    
     def __repr__(self):
         return f'<Usuario {self.id} - {self.nome} ({self.papel.value})>'
     
@@ -32,6 +38,27 @@ class Usuario(db.Model):
     def verificar_senha(self, senha):
         """Verificar se a senha fornecida está correta"""
         return check_password_hash(self.hash_senha, senha)
+    
+    def gerar_token_reset_senha(self):
+        """Gerar token para reset de senha"""
+        self.token_reset_senha = secrets.token_urlsafe(32)
+        self.expiracao_token_reset = datetime.utcnow() + timedelta(hours=1)  # Token válido por 1 hora
+        return self.token_reset_senha
+    
+    def verificar_token_reset_senha(self, token):
+        """Verificar se o token de reset é válido"""
+        if not self.token_reset_senha or not self.expiracao_token_reset:
+            return False
+        
+        if datetime.utcnow() > self.expiracao_token_reset:
+            return False
+            
+        return self.token_reset_senha == token
+    
+    def limpar_token_reset_senha(self):
+        """Limpar token de reset após uso"""
+        self.token_reset_senha = None
+        self.expiracao_token_reset = None
     
     def to_dict(self):
         """Converter utilizador para dicionário (sem informações sensíveis)"""

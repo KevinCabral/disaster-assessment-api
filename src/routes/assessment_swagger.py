@@ -2,6 +2,7 @@ from flask import request
 from flask_restx import Namespace, Resource, fields
 from src.models.user import db
 from src.models.assessment import AvaliacaoDesastre
+from src.routes.auth import token_obrigatorio
 import os
 from werkzeug.utils import secure_filename
 
@@ -96,6 +97,8 @@ class ListaAvaliacoes(Resource):
     @api.param('structure_type', 'Filtrar por tipo de estrutura', enum=['habitacao', 'comercio', 'agricultura', 'outro'])
     @api.param('urgent_need', 'Filtrar por necessidade urgente', enum=['agua_potavel', 'alimentacao', 'abrigo_temporario', 'roupas_cobertores', 'medicamentos', 'outros'])
     @api.marshal_with(assessment_model, as_list=True)
+    @api.doc(security='Bearer')
+    @token_obrigatorio
     def get(self):
         """Listar todas as avaliações de desastre"""
         try:
@@ -126,6 +129,8 @@ class ListaAvaliacoes(Resource):
     @api.doc('criar_avaliacao')
     @api.expect(entrada_avaliacao)
     @api.marshal_with(assessment_model, code=201)
+    @api.doc(security='Bearer')
+    @token_obrigatorio
     def post(self):
         """Criar uma nova avaliação de desastre"""
         try:
@@ -165,6 +170,8 @@ class ListaAvaliacoes(Resource):
 class RecursoAvaliacao(Resource):
     @api.doc('obter_avaliacao')
     @api.marshal_with(assessment_model)
+    @api.doc(security='Bearer')
+    @token_obrigatorio
     def get(self, assessment_id):
         """Obter uma avaliação específica pelo ID"""
         try:
@@ -178,6 +185,8 @@ class RecursoAvaliacao(Resource):
     @api.doc('atualizar_avaliacao')
     @api.expect(entrada_avaliacao)
     @api.marshal_with(assessment_model)
+    @api.doc(security='Bearer')
+    @token_obrigatorio
     def put(self, assessment_id):
         """Atualizar uma avaliação existente"""
         try:
@@ -203,6 +212,8 @@ class RecursoAvaliacao(Resource):
             return {'error': f'Erro ao atualizar avaliação: {str(e)}'}, 500
 
     @api.doc('eliminar_avaliacao')
+    @api.doc(security='Bearer')
+    @token_obrigatorio
     def delete(self, assessment_id):
         """Eliminar uma avaliação"""
         try:
@@ -220,6 +231,8 @@ class RecursoAvaliacao(Resource):
 @api.route('/<int:assessment_id>/evidence')
 class CarregarProvas(Resource):
     @api.doc('carregar_provas')
+    @api.doc(security='Bearer')
+    @token_obrigatorio
     def post(self, assessment_id):
         """Carregar ficheiros de prova para uma avaliação"""
         try:
@@ -271,6 +284,8 @@ class CarregarProvas(Resource):
 class RecursoEstatisticas(Resource):
     @api.doc('obter_estatisticas')
     @api.marshal_with(modelo_estatisticas)
+    @api.doc(security='Bearer')
+    @token_obrigatorio
     def get(self):
         """Obter estatísticas das avaliações"""
         try:
@@ -308,6 +323,8 @@ class RecursoEstatisticas(Resource):
 class RecursoOpcoes(Resource):
     @api.doc('obter_opcoes')
     @api.marshal_with(modelo_opcoes)
+    @api.doc(security='Bearer')
+    @token_obrigatorio
     def get(self):
         """Obter opções disponíveis para os formulários"""
         return {

@@ -10,6 +10,7 @@ from src.models.user import db
 from src.models.assessment import AvaliacaoDesastre
 from src.routes.assessment_swagger import api as api_avaliacoes
 from src.routes.auth import api as api_autenticacao
+from src.routes.auth import api as api_autenticacao
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static'))
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
@@ -24,11 +25,21 @@ api = Api(
     title='API de Avaliação de Desastres',
     description='API para gestão de avaliações de desastres naturais',
     doc='/docs/',  # Swagger UI estará disponível em /docs/
-    prefix='/api'
+    prefix='/api',
+    security='Bearer',
+    authorizations={
+        'Bearer': {
+            'type': 'apiKey',
+            'in': 'header',
+            'name': 'Authorization',
+            'description': 'Adicione: Bearer &lt;seu_token_jwt&gt;'
+        }
+    }
 )
 
 # Adicionar namespaces
 api.add_namespace(api_avaliacoes, path='/avaliacoes')
+api.add_namespace(api_autenticacao, path='/autenticacao')
 api.add_namespace(api_autenticacao, path='/autenticacao')
 
 # Configuração da base de dados

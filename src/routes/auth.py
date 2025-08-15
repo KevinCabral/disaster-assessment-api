@@ -48,8 +48,29 @@ modelo_verificar_token = api.model('VerificarToken', {
 
 modelo_resposta_verificacao = api.model('RespostaVerificacao', {
     'valido': fields.Boolean(description='Se o token é válido'),
-    'utilizador': fields.Nested(modelo_utilizador, description='Dados do utilizador'),
+    'utilizador': fields.Nested(modelo_utilizador),
     'expira_em': fields.DateTime(description='Data de expiração do token')
+})
+
+modelo_alterar_senha = api.model('AlterarSenha', {
+    'senha_atual': fields.String(required=True, description='Senha atual'),
+    'senha_nova': fields.String(required=True, description='Nova senha'),
+    'confirmar_senha': fields.String(required=True, description='Confirmação da nova senha')
+})
+
+modelo_solicitar_reset = api.model('SolicitarReset', {
+    'email': fields.String(required=True, description='Email do utilizador')
+})
+
+modelo_reset_senha = api.model('ResetSenha', {
+    'token': fields.String(required=True, description='Token de reset'),
+    'senha_nova': fields.String(required=True, description='Nova senha'),
+    'confirmar_senha': fields.String(required=True, description='Confirmação da nova senha')
+})
+
+modelo_resposta_reset = api.model('RespostaReset', {
+    'mensagem': fields.String(description='Mensagem de sucesso'),
+    'email_enviado': fields.Boolean(description='Se o email foi enviado')
 })
 
 def gerar_token(utilizador):
@@ -73,6 +94,57 @@ def verificar_token(token):
         return None
     except jwt.InvalidTokenError:
         return None
+
+def enviar_email_reset_senha(email, token):
+    """Enviar email com link de reset de senha"""
+    try:
+        # Aqui você configuraria o envio real do email
+        # Por agora, apenas simularemos
+        print(f"EMAIL: Enviando token de reset para {email}: {token}")
+        
+        # Em produção, você enviaria um email com um link como:
+        # https://seudominio.com/reset-password?token={token}
+        
+        return True
+    except Exception as e:
+        print(f"Erro ao enviar email: {e}")
+        return False
+
+from functools import wraps
+
+def token_obrigatorio(f):
+    """Decorador para rotas que requerem autenticação"""
+    @wraps(f)
+    def decorator(*args, **kwargs):
+        token = None
+        
+        # Verificar header Authorization
+        if 'Authorization' in request.headers:
+            auth_header = request.headers['Authorization']
+            
+            # Aceitar tanto "Bearer token" quanto apenas "token"
+            if auth_header.startswith('Bearer '):
+                token = auth_header.split(" ")[1]
+            else:
+                token = auth_header  # Assumir que é apenas o token
+        
+        if not token:
+            return {'error': 'Token de autorização não fornecido'}, 401
+        
+        payload = verificar_token(token)
+        if not payload:
+            return {'error': 'Token inválido ou expirado'}, 401
+        
+        # Verificar se o utilizador ainda existe
+        utilizador = Usuario.query.get(payload['utilizador_id'])  # Corrigido: utilizador_id em vez de user_id
+        if not utilizador:
+            return {'error': 'Utilizador não encontrado'}, 401
+        
+        # Adicionar utilizador ao contexto
+        request.current_user = utilizador
+        return f(*args, **kwargs)
+    
+    return decorator
 
 @api.route('/login')
 class Login(Resource):
@@ -290,3 +362,137 @@ class RecursoUtilizador(Resource):
         except Exception as e:
             db.session.rollback()
             return {'error': f'Erro ao eliminar utilizador: {str(e)}'}, 500
+
+@api.route('/alterar-senha')
+class AlterarSenha(Resource):
+    @api.doc('alterar_senha')
+    @api.expect(modelo_alterar_senha)
+    @token_obrigatorio
+    def post(self):
+        """Alterar senha do utilizador autenticado"""
+        try:
+            data = api.payload
+            if not data:
+                return {'error': 'Dados não fornecidos'}, 400
+            
+            senha_atual = data.get('senha_atual')
+            senha_nova = data.get('senha_nova')
+            confirmar_senha = data.get('confirmar_senha')
+            
+            if not all([senha_atual, senha_nova, confirmar_senha]):
+                return {'error': 'Todos os campos são obrigatórios'}, 400
+            
+            # Verificar senha atual
+            if not request.current_user.verificar_senha(senha_atual):
+                return {'error': 'Senha atual incorreta'}, 401
+            
+            # Verificar se nova senha e confirmação coincidem
+            if senha_nova != confirmar_senha:
+                return {'error': 'Nova senha e confirmação não coincidem'}, 400
+            
+            # Verificar se nova senha é diferente da atual
+            if request.current_user.verificar_senha(senha_nova):
+                return {'error': 'A nova senha deve ser diferente da atual'}, 400
+            
+            # Validar força da senha (mínimo 6 caracteres)
+            if len(senha_nova) < 6:
+                return {'error': 'A senha deve ter pelo menos 6 caracteres'}, 400
+            
+            # Alterar senha
+            request.current_user.definir_senha(senha_nova)
+            db.session.commit()
+            
+            return {'mensagem': 'Senha alterada com sucesso'}, 200
+            
+        except Exception as e:
+            db.session.rollback()
+            return {'error': f'Erro ao alterar senha: {str(e)}'}, 500
+
+@api.route('/solicitar-reset-senha')
+class SolicitarResetSenha(Resource):
+    @api.doc('solicitar_reset_senha')
+    @api.expect(modelo_solicitar_reset)
+    @api.marshal_with(modelo_resposta_reset, code=200)
+    def post(self):
+        """Solicitar reset de senha por email"""
+        try:
+            data = api.payload
+            if not data:
+                return {'error': 'Dados não fornecidos'}, 400
+            
+            email = data.get('email')
+            if not email:
+                return {'error': 'Email é obrigatório'}, 400
+            
+            # Buscar utilizador por email
+            utilizador = Usuario.query.filter_by(email=email).first()
+            
+            # Por segurança, sempre retornamos sucesso mesmo se o email não existir
+            if utilizador:
+                # Gerar token de reset
+                token = utilizador.gerar_token_reset_senha()
+                db.session.commit()
+                
+                # Enviar email
+                email_enviado = enviar_email_reset_senha(email, token)
+                
+                return {
+                    'mensagem': 'Se o email existir, instruções de reset foram enviadas',
+                    'email_enviado': email_enviado
+                }, 200
+            else:
+                # Simular delay para não revelar se email existe
+                import time
+                time.sleep(1)
+                
+                return {
+                    'mensagem': 'Se o email existir, instruções de reset foram enviadas',
+                    'email_enviado': False
+                }, 200
+            
+        except Exception as e:
+            db.session.rollback()
+            return {'error': f'Erro ao solicitar reset: {str(e)}'}, 500
+
+@api.route('/reset-senha')
+class ResetSenha(Resource):
+    @api.doc('reset_senha')
+    @api.expect(modelo_reset_senha)
+    def post(self):
+        """Resetar senha usando token"""
+        try:
+            data = api.payload
+            if not data:
+                return {'error': 'Dados não fornecidos'}, 400
+            
+            token = data.get('token')
+            senha_nova = data.get('senha_nova')
+            confirmar_senha = data.get('confirmar_senha')
+            
+            if not all([token, senha_nova, confirmar_senha]):
+                return {'error': 'Todos os campos são obrigatórios'}, 400
+            
+            # Verificar se nova senha e confirmação coincidem
+            if senha_nova != confirmar_senha:
+                return {'error': 'Nova senha e confirmação não coincidem'}, 400
+            
+            # Validar força da senha
+            if len(senha_nova) < 6:
+                return {'error': 'A senha deve ter pelo menos 6 caracteres'}, 400
+            
+            # Buscar utilizador com token válido
+            utilizador = Usuario.query.filter_by(token_reset_senha=token).first()
+            
+            if not utilizador or not utilizador.verificar_token_reset_senha(token):
+                return {'error': 'Token inválido ou expirado'}, 400
+            
+            # Resetar senha
+            utilizador.definir_senha(senha_nova)
+            utilizador.limpar_token_reset_senha()
+            db.session.commit()
+            
+            return {'mensagem': 'Senha resetada com sucesso'}, 200
+            
+        except Exception as e:
+            db.session.rollback()
+            return {'error': f'Erro ao resetar senha: {str(e)}'}, 500
